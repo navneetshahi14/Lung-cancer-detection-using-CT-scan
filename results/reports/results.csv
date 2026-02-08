@@ -1,0 +1,5 @@
+Model,Accuracy,Epochs,prep_windowing,prep_clahe,prep_hist_eq,prep_gaussian,prep_median,prep_sharpen_flag,prep_norm_type
+resnet50,0.9578313253012049,15,False,True,False,False,True,False,minmax
+resnet50,0.9397590361445785,15,False,True,False,True,False,False,minmax
+vit,0.8975903614457831,15,False,True,False,True,False,False,minmax
+resnet50_vit,0.9096385542168675,15,False,True,False,True,False,False,minmax
