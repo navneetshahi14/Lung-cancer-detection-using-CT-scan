@@ -32,8 +32,20 @@ SUPPORTED_MODELS = {
     "vgg16": "vgg16",
     "efficientnet": "efficientnet_b0",
     "inception": "inception_v3",
-    "vit": "vit_base_patch16_224"
+    "vit": "vit_base_patch16_224",
+    "densenet":"densenet121",
+    "b4":"efficientnet_b4",
+    "convextiny":"convnext_tiny"
 }
+
+# cnn_models = [
+#     "resnet50",
+#     "densenet121",
+#     "efficientnet_b0",
+#     "inception_v3",
+#     "efficientnet_b4",
+#     "convnext_tiny"
+# ]
 
 
 def get_single_model(name: str, num_classes: int = 3):
