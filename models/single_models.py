@@ -1,5 +1,7 @@
 import torch.nn as nn
 import timm
+import torchvision.models as models
+
 
 def build_model(model_name: str, num_classes: int = 3, pretrained:bool = True):
 
@@ -50,7 +52,20 @@ SUPPORTED_MODELS = {
 
 def get_single_model(name: str, num_classes: int = 3):
 
+    if name == "vgg16":
+        backbone = models.vgg16(pretrained=True)
+
+        for param in backbone.features.parameters():
+            param.requires_grad = False
+
+        in_features = backbone.classifier[-1].in_features
+        backbone.classifier[-1] = nn.Linear(in_features, num_classes)
+
+        return backbone
+
     if name not in SUPPORTED_MODELS:
-        raise ValueError(f"Model '{name}' not supported. Choose from {list(SUPPORTED_MODELS.keys())}")
+        raise ValueError(
+            f"Model '{name}' not supported. Choose from {list(SUPPORTED_MODELS.keys()) + ['vgg16']}"
+        )
 
     return build_model(SUPPORTED_MODELS[name], num_classes=num_classes)

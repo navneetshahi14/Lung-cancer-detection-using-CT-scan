@@ -10,9 +10,11 @@ def ct_windowing(img, center=-600,width=1500):
     lower = center - width // 2
     upper = center + width // 2
 
-    img = np.clip(img,lower,upper)
-    img = (img - lower) / (upper - lower + 1e8)
+    img = np.clip(img, lower, upper)
+    img = (img - lower) / (upper - lower + 1e-8)
     img = (img * 255).astype(np.uint8)
+
+    return img
 
 # Individual preprocessing operations
 def apply_clahe(img):
@@ -76,6 +78,9 @@ class CTPreprocess:
     def __call__(self, image):
         img = np.array(image)
 
+        if img is None:
+            raise ValueError("Preprocessing returned None image")
+
         if self.windowing:
             img = ct_windowing(img)
 
@@ -118,7 +123,7 @@ def get_transformss(
             transforms.RandomResizedCrop(img_size, scale=(0.9, 1.1)),
 
             transforms.ToTensor(),
-            transforms.Normalize([0.5], [0.5])
+            transforms.Normalize([0.5,0.5,0.5], [0.5,0.5,0.5])
         ])
     else:
         return transforms.Compose([
@@ -126,5 +131,5 @@ def get_transformss(
             transforms.ToPILImage(),
             transforms.Resize((img_size, img_size)),
             transforms.ToTensor(),
-            transforms.Normalize([0.5], [0.5])
+            transforms.Normalize([0.5,0.5,0.5], [0.5,0.5,0.5])
         ])
