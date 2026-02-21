@@ -203,7 +203,8 @@ def save_epoch_history_excel(history, model_name, save_path="results/experiment_
         "Epoch":list(range(1,len(history["train_loss"]) + 1)),
         "Train Loss":history["train_loss"],
         "Val Loss":history["val_loss"],
-        "Train Acc":history["val_acc"],
+        "Train Acc":history["train_acc"],
+        "Val Acc":history["val_acc"],
         "LR": history.get("lr",[None] * len(history["train_loss"]))
     })
 
@@ -237,3 +238,24 @@ def save_training_summary_excel(summary, model_name, save_path="results/training
     df.to_excel(save_path, index=False)
 
     print(f"📊 Training summary saved → {save_path}")
+
+def save_kfold_summary_excel(results, exp_id, save_path="results/kfold_summary.xlsx"):
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+    df_new = pd.DataFrame([{
+        "Experiment": exp_id,
+        "Mean Accuracy": results["mean_acc"],
+        "Std Accuracy": results["std_acc"],
+        "Mean F1": results["mean_f1"],
+        "Std F1": results["std_f1"],
+    }])
+
+    if os.path.exists(save_path):
+        df_old = pd.read_excel(save_path)
+        df = pd.concat([df_old, df_new], ignore_index=True)
+    else:
+        df = df_new
+
+    df.to_excel(save_path, index=False)
+
+    print(f"📊 K-Fold summary saved → {save_path}")

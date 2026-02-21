@@ -3,7 +3,10 @@ from collections import Counter;
 import torch
 
 def compute_class_weights(dataset):
-    labels = [label for _,label in dataset.samples]
+    if hasattr(dataset, "indices"):  # Subset case
+        labels = [dataset.dataset.targets[i] for i in dataset.indices]
+    else:  # ImageFolder case
+        labels = dataset.targets
     counts = Counter(labels)
 
     num_classes = len(counts)

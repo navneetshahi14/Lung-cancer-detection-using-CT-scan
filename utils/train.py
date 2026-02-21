@@ -53,7 +53,7 @@ def evaluate(model,loader,criterion,device):
     return running_loss/ len(loader), acc, preds, labels_list
 
 
-def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight_decay=1e-4,patience=5,save_dir="results/checkpoints",model_name="model"):
+def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight_decay=1e-4,patience=7,save_dir="results/checkpoints",model_name="model"):
     # criterion = nn.CrossEntropyLoss()
     class_weights = compute_class_weights(train_loader.dataset).to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
