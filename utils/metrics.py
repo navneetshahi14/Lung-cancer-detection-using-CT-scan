@@ -105,7 +105,10 @@ def save_results_csv(
     precision=None,
     recall=None,
     f1=None,
-    auc_score=None
+    auc_score=None,
+    val_acc=None,
+    val_loss=None,
+    val_f1=None
 ):
     rows = []
 
@@ -113,8 +116,17 @@ def save_results_csv(
 
         row = {
             "Model": model_name,
-            "Accuracy": acc,
+            "Test_Accuracy": acc,
         }
+
+        if val_acc is not None:
+            row["Best_Val_Accuracy"] = val_acc
+        
+        if val_f1 is not None:
+            row["Best_Val_f1"] = val_f1
+ 
+        if val_loss is not None:
+            row["Best_Val_Loss"] = val_loss
 
         if precision is not None:
             row["Precision"] = precision
@@ -178,26 +190,35 @@ def plot_model_comparison(results_dict, save_path=None):
 
 
 def save_grayscale_samples(images, save_dir, max_images=5):
-    """
-    Saves grayscale versions of sample images.
-    """
 
     os.makedirs(save_dir, exist_ok=True)
 
     for i in range(min(len(images), max_images)):
-        img = images[i].permute(1, 2, 0).cpu().numpy()
-        img = (img - img.min()) / (img.max() - img.min() + 1e-8)
-        img = (img * 255).astype(np.uint8)
 
-        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        img = images[i].cpu()
+
+        if img.shape[0] == 1:
+            # Already grayscale
+            gray = img.squeeze(0).numpy()
+            gray = (gray - gray.min()) / (gray.max() - gray.min() + 1e-8)
+            gray = (gray * 255).astype(np.uint8)
+
+        else:
+            # RGB case
+            img_np = img.permute(1, 2, 0).numpy()
+            img_np = (img_np - img_np.min()) / (img_np.max() - img_np.min() + 1e-8)
+            img_np = (img_np * 255).astype(np.uint8)
+            gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
 
         cv2.imwrite(os.path.join(save_dir, f"gray_{i}.png"), gray)
 
     print(f"✅ Grayscale samples saved → {save_dir}")
 
+
 def save_epoch_history_excel(history, model_name, save_path="results/experiment_logs/experiment_logs.xlsx"):
 
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    print(history)
 
     df = pd.DataFrame({
         "Epoch":list(range(1,len(history["train_loss"]) + 1)),
@@ -205,7 +226,7 @@ def save_epoch_history_excel(history, model_name, save_path="results/experiment_
         "Val Loss":history["val_loss"],
         "Train Acc":history["train_acc"],
         "Val Acc":history["val_acc"],
-        "LR": history.get("lr",[None] * len(history["train_loss"]))
+        "Val F1":history["val_f1"]
     })
 
     if os.path.exists(save_path):

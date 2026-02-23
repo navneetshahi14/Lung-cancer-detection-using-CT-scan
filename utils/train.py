@@ -6,6 +6,7 @@ from utils.metrics import plot_roc_auc
 from copy import deepcopy
 from utils.balancing import compute_class_weights
 import os
+from sklearn.metrics import f1_score
 
 def train_one_epoch(model,loader,optimizer,criterion,device):
     model.train()
@@ -66,6 +67,7 @@ def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight
     os.makedirs(save_dir,exist_ok=True)
     
     best_val_acc = 0.0
+    best_val_f1 = 0.0
     best_val_loss = float("inf")
     best_epoch = 0
     wait = 0
@@ -77,7 +79,8 @@ def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight
         "train_loss":[],
         "val_loss":[],
         "train_acc":[],
-        "val_acc":[]
+        "val_acc":[],
+        "val_f1":[]
     }
 
     for epoch in range(epochs):
@@ -86,32 +89,39 @@ def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight
             model, train_loader, optimizer, criterion, device
         )
 
-        val_loss, val_acc, _ ,_ = evaluate(
-            model,val_loader,criterion,device
+        val_loss, val_acc, val_preds, val_labels = evaluate(
+            model, val_loader, criterion, device
         )
+
+        val_f1 = f1_score(val_labels, val_preds, average="macro")
 
         history["train_loss"].append(train_loss)
         history["val_loss"].append(val_loss)
         history["train_acc"].append(train_acc)
         history["val_acc"].append(val_acc)
+        history["val_f1"].append(val_f1)
 
 
         print(f"\nEpoch {epoch+1}/{epochs}")
         print(f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f}")
-        print(f"Val   Loss: {val_loss:.4f} | Val   Acc: {val_acc:.4f}")
+        print(f"Val   Loss: {val_loss:.4f} | Val   Acc: {val_acc:.4f} | Val F1: {val_f1:.4f}")
 
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
+        if val_f1 > best_val_f1:
+            # best_val_acc = val_acc
+            # best_val_loss = val_loss
+            # best_epoch = epoch + 1
+            # wait = 0
+            best_val_f1 = val_f1
             best_val_loss = val_loss
             best_epoch = epoch + 1
-            wait = 0
 
             torch.save({
                 "epoch":best_epoch,
                 "model_state_dict":model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
-                "val_acc": best_val_acc,
-                "val_loss": best_val_loss,
+                "val_acc": val_acc,
+                "val_f1": val_f1,  
+                "val_loss": val_loss,
             },best_path)
 
             print(f"Best model saved -> Epoch {best_epoch}")
@@ -126,7 +136,7 @@ def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight
     
     summary = {
         "best_epoch": best_epoch,
-        "best_val_acc": best_val_acc,
+        "best_val_f1": best_val_f1,
         "best_val_loss": best_val_loss,
         "total_epochs_ran": len(history["val_acc"]),
         "stopped_early": stopped_early,
@@ -167,8 +177,13 @@ def test_model(
     all_labels = []
     all_probs = []
     sample_images = []
+    sample_labels = []
+    class_counts = {i: 0 for i in range(len(class_names))}
+    max_per_class = 3
 
     with torch.no_grad():
+
+        
         for images, labels in test_loader:
 
             images = images.to(device)
@@ -185,9 +200,13 @@ def test_model(
             all_labels.extend(labels.cpu().numpy())
             all_probs.extend(probs.cpu().numpy())
 
-            # store few images for GradCAM / grayscale
-            if len(sample_images) < 10:
-                sample_images.extend(images.cpu())
+            for img, label in zip(images, labels):
+                label_int = label.item()
+
+                if class_counts[label_int] < max_per_class:
+                    sample_images.append(img.cpu())
+                    sample_labels.append(label_int)
+                    class_counts[label_int] += 1
 
     test_acc = running_correct / total
 
@@ -202,7 +221,7 @@ def test_model(
             np.array(all_labels),
             np.array(all_preds),
             np.array(all_probs),
-            sample_images,
+            sample_images, sample_labels
         )
 
     return test_acc, report, cm
