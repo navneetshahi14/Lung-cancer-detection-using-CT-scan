@@ -110,10 +110,10 @@ def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight
             # best_val_acc = val_acc
             # best_val_loss = val_loss
             # best_epoch = epoch + 1
-            # wait = 0
             best_val_f1 = val_f1
             best_val_loss = val_loss
             best_epoch = epoch + 1
+            wait = 0
 
             torch.save({
                 "epoch":best_epoch,
@@ -144,6 +144,7 @@ def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight
             
     
     print(f"\n Best Epoch: {best_epoch} | Val Acc: {best_val_acc:.4f}")
+    print(f"\n Best Epoch: {best_epoch} | Best Val F1: {best_val_f1:.4f}")
 
     return model, history, summary
 
