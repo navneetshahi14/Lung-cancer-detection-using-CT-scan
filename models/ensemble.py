@@ -2,23 +2,25 @@ import torch
 import torch.nn as nn
 
 class SoftVotingEnsemble(nn.Module):
-    def __init__(self,models):
+    def __init__(self, models):
         super().__init__()
         self.models = nn.ModuleList(models)
 
-    def forward(self,x):
-        probs_sum = None
+    def forward(self, x):
+
+        logits_sum = None
 
         for model in self.models:
-            out = torch.softmax(model(x),dim=1)
+            logits = model(x)
 
-            if probs_sum is None:
-                probs_sum = out
+            if logits_sum is None:
+                logits_sum = logits
             else:
-                probs_sum += out
-        
-        probs_avg = probs_sum/len(self.models)
-        return probs_avg
+                logits_sum += logits
+
+        logits_avg = logits_sum / len(self.models)
+
+        return logits_avg
     
 class WeightedEnsemble(nn.Module):
     def __init__(self, models, weights):
@@ -27,18 +29,22 @@ class WeightedEnsemble(nn.Module):
         assert len(models) == len(weights)
 
         self.models = nn.ModuleList(models)
-        self.weights = torch.tensor(weights,dtype=torch.float32)
+        self.weights = torch.tensor(weights, dtype=torch.float32)
 
-    def forward(self,x):
-        probs_sum = None
+    def forward(self, x):
+
+        logits_sum = None
+        weights = self.weights.to(x.device)
 
         for i, model in enumerate(self.models):
-            out = torch.softmax(model(x),dim=1) * self.weights[i]
 
-            if probs_sum is None:
-                probs_sum = out
-            else: 
-                probs_sum += out
+            logits = model(x) * weights[i]
 
-        probs_avg = probs_sum/self.weights.sum()
-        return probs_avg
+            if logits_sum is None:
+                logits_sum = logits
+            else:
+                logits_sum += logits
+
+        logits_avg = logits_sum / weights.sum()
+
+        return logits_avg
