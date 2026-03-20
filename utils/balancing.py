@@ -14,7 +14,14 @@ def compute_class_weights(dataset):
 
     weights = []
     for i in range(num_classes):
-        weights.append(total/ (num_classes * counts[i]))
+        # weights.append(total/ (num_classes * counts[i]))
+        w = np.log(total / (counts[i] + 1e-6)) 
+        weights.append(w)
+
+    weights = np.array(weights)
+    weights = weights / weights.sum() * num_classes 
+    
+    print(weights)
 
     return torch.tensor(weights,dtype=torch.float32)
 

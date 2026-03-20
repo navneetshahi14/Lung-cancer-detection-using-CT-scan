@@ -8,26 +8,53 @@ from utils.balancing import compute_class_weights
 import os
 from sklearn.metrics import f1_score
 
-def train_one_epoch(model,loader,optimizer,criterion,device):
+def train_one_epoch(model,loader,optimizer,criterion,device,scaler):
     model.train()
 
     running_loss = 0
     preds, labels_list = [],[]
+    # loss.backward()
 
-    for images,labels in loader:
+    # torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+    
+    # optimizer.step()
+
+    # for images,labels in loader:
+    #     images, labels = images.to(device), labels.to(device)
+
+    #     optimizer.zero_grad()
+    #     outputs = model(images)
+
+    #     loss = criterion(outputs, labels)
+    #     loss.backward()
+    #     optimizer.step()
+
+    #     running_loss += loss.item()
+
+    #     preds.extend(torch.argmax(outputs,1).cpu().numpy())
+    #     labels_list.extend(labels.cpu().numpy())
+
+    for images, labels in loader:
         images, labels = images.to(device), labels.to(device)
 
         optimizer.zero_grad()
-        outputs = model(images)
 
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
+        with torch.autocast(device_type="cuda"):
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+
+        scaler.scale(loss).backward()
+
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
+        scaler.step(optimizer)
+        scaler.update()
 
         running_loss += loss.item()
 
-        preds.extend(torch.argmax(outputs,1).cpu().numpy())
+        preds.extend(torch.argmax(outputs, 1).cpu().numpy())
         labels_list.extend(labels.cpu().numpy())
+
 
     acc = accuracy_score(labels_list,preds)
     return running_loss/ len(loader) ,acc
@@ -54,16 +81,25 @@ def evaluate(model,loader,criterion,device):
     return running_loss/ len(loader), acc, preds, labels_list
 
 
-def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight_decay=1e-4,patience=7,save_dir="results/checkpoints/ensemble",model_name="model"):
+def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight_decay=1e-4,patience=7,save_dir="results/checkpoints/",model_name="model"):
     # criterion = nn.CrossEntropyLoss()
     class_weights = compute_class_weights(train_loader.dataset).to(device)
-    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    criterion = nn.CrossEntropyLoss(weight=class_weights,label_smoothing=0.1)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=lr,
         weight_decay=weight_decay
     )
 
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode='min',
+        patience=5,
+        factor=0.3,
+        verbose=True
+    )
+
+    scaler = torch.amp.GradScaler(device='cuda')
     os.makedirs(save_dir,exist_ok=True)
     
     best_val_acc = 0.0
@@ -86,7 +122,7 @@ def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight
     for epoch in range(epochs):
 
         train_loss, train_acc = train_one_epoch(
-            model, train_loader, optimizer, criterion, device
+            model, train_loader, optimizer, criterion, device,scaler
         )
 
         val_loss, val_acc, val_preds, val_labels = evaluate(
@@ -106,12 +142,15 @@ def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight
         print(f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f}")
         print(f"Val   Loss: {val_loss:.4f} | Val   Acc: {val_acc:.4f} | Val F1: {val_f1:.4f}")
 
-        if val_f1 > best_val_f1:
+        scheduler.step(val_loss)
+
+        if val_f1 > best_val_f1 and val_loss < best_val_loss:
             # best_val_acc = val_acc
             # best_val_loss = val_loss
             # best_epoch = epoch + 1
             best_val_f1 = val_f1
             best_val_loss = val_loss
+            best_val_acc = val_acc
             best_epoch = epoch + 1
             wait = 0
 
@@ -136,6 +175,7 @@ def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight
     
     summary = {
         "best_epoch": best_epoch,
+        "best_val_acc": best_val_acc,
         "best_val_f1": best_val_f1,
         "best_val_loss": best_val_loss,
         "total_epochs_ran": len(history["val_acc"]),
@@ -143,8 +183,8 @@ def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight
     }
             
     
-    print(f"\n Best Epoch: {best_epoch} | Val Acc: {best_val_acc:.4f}")
-    print(f"\n Best Epoch: {best_epoch} | Best Val F1: {best_val_f1:.4f}")
+    print(f"\n🏆 Best Epoch: {best_epoch}")
+    print(f"Val Acc: {best_val_acc:.4f} | Val F1: {best_val_f1:.4f} | Val Loss: {best_val_loss:.4f}")
 
     return model, history, summary
 
