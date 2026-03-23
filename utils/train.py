@@ -4,7 +4,7 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 import numpy as np
 from utils.metrics import plot_roc_auc
 from copy import deepcopy
-from utils.balancing import compute_class_weights
+from utils.balancing import FocalLoss, compute_class_weights
 import os
 from sklearn.metrics import f1_score
 
@@ -84,7 +84,8 @@ def evaluate(model,loader,criterion,device):
 def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight_decay=1e-4,patience=7,save_dir="results/checkpoints/",model_name="model"):
     # criterion = nn.CrossEntropyLoss()
     class_weights = compute_class_weights(train_loader.dataset).to(device)
-    criterion = nn.CrossEntropyLoss(weight=class_weights,label_smoothing=0.1)
+    # criterion = nn.CrossEntropyLoss(weight=class_weights,label_smoothing=0.1)
+    criterion = FocalLoss(alpha=class_weights,gamma=2)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=lr,
