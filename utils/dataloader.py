@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader
 from torchvision import datasets
 
 from utils.preprocessing import get_transformss
+from utils.balancing import get_weighted_sampler
 
 def get_datasets(
     data_dir,
@@ -54,11 +55,13 @@ def get_dataloaders(
         img_size=img_size,
         preprocess_config=preprocess_config
     )
+    
+    sampler = get_weighted_sampler(train_ds)
 
     train_loader = DataLoader(
         train_ds,
         batch_size=batch_size,
-        shuffle=True,
+        sampler=sampler,
         num_workers=num_workers,
         pin_memory=True
     )
@@ -74,7 +77,6 @@ def get_dataloaders(
     test_loader = DataLoader(
         test_ds,
         batch_size=batch_size,
-        shuffle=False,
         num_workers=num_workers,
         pin_memory=True
     )
@@ -83,7 +85,7 @@ def get_dataloaders(
 
 
 if __name__ == "__main__":
-    DATA_DIR = "../lung_ct_split"
+    DATA_DIR = "../lung_ct_split_no_dup"
 
     preprocess_cfg = {
         "windowing": True,

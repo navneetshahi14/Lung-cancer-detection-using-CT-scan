@@ -52,7 +52,7 @@ def get_weighted_sampler(dataset):
     num_samples = len(labels)
     
     class_weights = {cls: num_samples /count for cls , count in class_counts.items()}
-    sample_weights = [class_weights[labels] for label in labels]
+    sample_weights = [class_weights[label] for label in labels]
     
     sampler = WeightedRandomSampler(
         weights=torch.DoubleTensor(sample_weights),
