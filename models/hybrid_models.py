@@ -36,15 +36,15 @@ class CNNTransformerHybrid(nn.Module):
             nn.Linear(fusion_dim, 512),
             nn.BatchNorm1d(512),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(0.6),
             nn.Linear(512, num_classes)
         )
 
     def forward(self, x):
         f1 = self.cnn(x)
-        f2 = self.vit(x)
+        # f2 = self.vit(x)
 
-        fused = torch.cat((f1, f2), dim=1)
+        fused = torch.cat((f1), dim=1)
         return self.classifier(fused)
 
 
@@ -125,11 +125,28 @@ class MultiCNNTransformerHybrid(nn.Module):
             fusion_dim = fused.shape[1]   # ⭐ auto-computed
 
         # ---------------- CLASSIFIER ----------------
+        # self.classifier = nn.Sequential(
+        #     nn.Linear(fusion_dim, 512),
+        #     nn.BatchNorm1d(512),
+        #     nn.ReLU(inplace=True),
+        #     nn.Dropout(0.5),
+        #     nn.Linear(512, num_classes)
+        # )
+        
         self.classifier = nn.Sequential(
-            nn.Linear(fusion_dim, 512),
+            # Layer 1: fusion_dim se 1024
+            nn.Linear(fusion_dim, 1024),
+            nn.BatchNorm1d(1024),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.3),  # Humne decide kiya tha dropout kam karenge
+            
+            # Layer 2: 1024 se 512 (Pehle yahan input 512 tha, isliye crash hua)
+            nn.Linear(1024, 512), 
             nn.BatchNorm1d(512),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.5),
+            nn.Dropout(0.2),
+            
+            # Final Layer: 512 se 3
             nn.Linear(512, num_classes)
         )
 

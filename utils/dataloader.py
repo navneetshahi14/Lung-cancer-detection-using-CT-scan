@@ -48,7 +48,7 @@ def get_dataloaders(
     batch_size=16,
     img_size=224,
     preprocess_config=None,
-    num_workers=0
+    num_workers=4
 ):
     train_ds, val_ds, test_ds = get_datasets(
         data_dir=data_dir,
@@ -57,15 +57,20 @@ def get_dataloaders(
     )
     
     sampler = get_weighted_sampler(train_ds)
+    print("sampler",sampler,"\n sampler len",len(sampler))
 
     train_loader = DataLoader(
         train_ds,
         batch_size=batch_size,
-        sampler=sampler,
+        shuffle=True,
+        # sampler=sampler,
         num_workers=num_workers,
-        pin_memory=True
+        pin_memory=True,
+        persistent_workers=True if num_workers > 0 else False
     )
 
+    print(train_loader)
+    
     val_loader = DataLoader(
         val_ds,
         batch_size=batch_size,
@@ -78,28 +83,78 @@ def get_dataloaders(
         test_ds,
         batch_size=batch_size,
         num_workers=num_workers,
+        shuffle=False,
         pin_memory=True
     )
 
     return train_loader, val_loader, test_loader, train_ds.classes
 
 
-if __name__ == "__main__":
-    DATA_DIR = "../lung_ct_split_no_dup"
 
-    preprocess_cfg = {
-        "windowing": True,
-        "clahe": True,
-        "median": True,
-        "sharpen_flag": True,
-        "norm_type": "minmax"
-    }
+def get_single_dataloaders(
+    data_dir,
+    batch_size=16,
+    img_size=224,
+    preprocess_config=None,
+    num_workers=4
+):
+    train_ds, val_ds, test_ds = get_datasets(
+        data_dir=data_dir,
+        img_size=img_size,
+        preprocess_config=preprocess_config
+    )
+    
+    sampler = get_weighted_sampler(train_ds)
+    print("sampler",sampler,"\n sampler len",len(sampler))
 
-    train_loader, val_loader, test_loader, classes = get_dataloaders(
-        data_dir=DATA_DIR,
-        batch_size=8,
-        preprocess_config=preprocess_cfg
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=batch_size,
+        shuffle=True,
+        # sampler=sampler,
+        num_workers=num_workers,
+        pin_memory=True,
+        persistent_workers=True if num_workers > 0 else False
     )
 
-    print("Classes:", classes)
-    print("Train batches:", len(train_loader))
+    print(train_loader)
+    
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+
+    test_loader = DataLoader(
+        test_ds,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        shuffle=False,
+        pin_memory=True
+    )
+
+    return train_loader, val_loader, test_loader, train_ds.classes
+
+
+
+# if __name__ == "__main__":
+#     DATA_DIR = "../lung_ct_split_no_dup"
+
+#     preprocess_cfg = {
+#         "windowing": True,
+#         "clahe": True,
+#         "median": True,
+#         "sharpen_flag": True,
+#         "norm_type": "minmax"
+#     }
+
+#     train_loader, val_loader, test_loader, classes = get_dataloaders(
+#         data_dir=DATA_DIR,
+#         batch_size=8,
+#         preprocess_config=preprocess_cfg
+#     )
+
+#     print("Classes:", classes)
+#     print("Train batches:", len(train_loader))

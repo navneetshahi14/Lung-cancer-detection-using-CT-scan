@@ -118,17 +118,19 @@ def get_transformss(
             transforms.Resize((img_size, img_size)),
 
             # Augmenation
-            transforms.RandomHorizontalFlip(p=0.3),
-            transforms.RandomRotation(10),
-            # transforms.RandomResizedCrop(img_size, scale=(0.9, 1.0)),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomRotation(20),
+            transforms.RandomResizedCrop(img_size, scale=(0.8, 1.0)),
             transforms.RandomAffine(
                 degrees=10,
                 translate=(0.05, 0.05),
                 scale=(0.95, 1.05)
             ),
+            transforms.ColorJitter(brightness=0.2, contrast=0.2),
 
             transforms.ToTensor(),
-            transforms.Normalize([0.5,0.5,0.5], [0.5,0.5,0.5])
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            transforms.RandomErasing(p=0.1, scale=(0.02, 0.1)),
         ])
     else:
         return transforms.Compose([
@@ -136,5 +138,5 @@ def get_transformss(
             transforms.ToPILImage(),
             transforms.Resize((img_size, img_size)),
             transforms.ToTensor(),
-            transforms.Normalize([0.5,0.5,0.5], [0.5,0.5,0.5])
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])

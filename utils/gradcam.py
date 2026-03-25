@@ -26,44 +26,51 @@ class GradCAM:
         self.target_layer.register_backward_hook(backward_hook)
 
     def generate(self, image_tensor, class_idx=None):
-        self.model.eval()
+            self.model.eval()
+            output = self.model(image_tensor)
 
-        output = self.model(image_tensor)
+            if class_idx is None:
+                class_idx = torch.argmax(output, dim=1).item()
 
-        if class_idx is None:
-            class_idx = torch.argmax(output, dim=1).item()
+            # Target class score
+            score = output[:, class_idx]
+            self.model.zero_grad()
+            score.backward(retain_graph=True) # Retain for multiple backbones if needed
 
-        loss = output[:, class_idx]
-        self.model.zero_grad()
-        loss.backward()
+            # Get weights using Global Average Pooling
+            gradients = self.gradients[0]
+            activations = self.activations[0]
+            
+            # GAP (Global Average Pooling) weights
+            weights = torch.mean(gradients, dim=(1, 2))
+            
+            # Weighted combination of activations
+            cam = torch.zeros(activations.shape[1:], dtype=torch.float32, device=activations.device)
+            for i, w in enumerate(weights):
+                cam += w * activations[i]
 
-        gradients = self.gradients[0]
-        activations = self.activations[0]
+            # ReLU and Normalization
+            cam = torch.relu(cam)
+            cam_np = cam.cpu().numpy()
+            
+            cam_np = cv2.GaussianBlur(cam_np,(7,7),0)
+            
+            # Percentile-based normalization (BETTER FOR CT SCANS)
+            # 1e-8 ensures no division by zero
+            cam_min, cam_max = cam_np.min(), cam_np.max()
+            cam_np = (cam_np - cam_min) / (cam_max - cam_min + 1e-8)
 
-        weights = torch.mean(gradients, dim=(1, 2))
-        cam = torch.zeros(
-            activations.shape[1:],
-            dtype=torch.float32,
-            device=activations.device
-        )
-
-
-        for i, w in enumerate(weights):
-            cam += w * activations[i]
-
-        cam = torch.relu(cam)
-        cam = cam - cam.min()
-        cam = cam / (cam.max() + 1e-8)
-
-        return cam.cpu().numpy(), class_idx
+            return cam_np, class_idx
 
 
 def overlay_cam_on_image(img, cam):
-    cam = cv2.resize(cam, (img.shape[1], img.shape[0]))
+    # Use INTER_CUBIC for smoother gradients
+    cam = cv2.resize(cam, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_CUBIC)
     heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
-    overlay = cv2.addWeighted(img, 0.6, heatmap, 0.4, 0)
+    
+    # 0.7 alpha allows the CT structures (bones/tissues) to be seen clearly
+    overlay = cv2.addWeighted(img, 0.7, heatmap, 0.3, 0)
     return overlay
-
 
 def save_gradcam_samples(
     gradcam,

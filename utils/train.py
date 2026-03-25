@@ -4,7 +4,7 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 import numpy as np
 from utils.metrics import plot_roc_auc
 from copy import deepcopy
-from utils.balancing import FocalLoss, compute_class_weights
+from utils.balancing import FocalLoss, compute_class_weights, compute_single_class_weights
 import os
 from sklearn.metrics import f1_score
 
@@ -13,6 +13,7 @@ def train_one_epoch(model,loader,optimizer,criterion,device,scaler):
 
     running_loss = 0
     preds, labels_list = [],[]
+    print(f"loader length is {len(loader)}")
     # loss.backward()
 
     # torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -81,11 +82,16 @@ def evaluate(model,loader,criterion,device):
     return running_loss/ len(loader), acc, preds, labels_list
 
 
-def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight_decay=1e-4,patience=7,save_dir="results/checkpoints/",model_name="model"):
+def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight_decay=1e-4,patience=10,save_dir="results/checkpoints/",model_name="model"):
     # criterion = nn.CrossEntropyLoss()
-    class_weights = compute_class_weights(train_loader.dataset).to(device)
-    criterion = nn.CrossEntropyLoss(weight=class_weights,label_smoothing=0.1)
-    # criterion = FocalLoss(alpha=class_weights,gamma=2)
+    class_weights = compute_single_class_weights(train_loader.dataset).to(device)
+    # class_weights = torch.tensor([2.0, 1.0, 1.5]).to(device)
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    # criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
+    # Bengin ko 2.5 weight do, Normal ko 1.8 (kyunki ye sabse zyada crash hua hai)
+    # alpha_manual = torch.tensor([2.0, 1.0, 1.5], dtype=torch.float32).to(device)
+    # criterion = FocalLoss(alpha=alpha_manual, gamma=2.0)
+    
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=lr,
@@ -95,8 +101,8 @@ def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         mode='min',
-        patience=5,
-        factor=0.3,
+        patience=3,
+        factor=0.1,
         verbose=True
     )
 
@@ -131,7 +137,17 @@ def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight
         )
 
         val_f1 = f1_score(val_labels, val_preds, average="macro")
+        
+        
+        
+        report = classification_report(val_labels, val_preds, output_dict=True)
 
+        print("Benign Recall:", report['0']["recall"])
+        print("Malignant Recall:", report['1']["recall"])
+        print("Normal Recall:",report['2']["recall"])
+        print(report)
+
+        
         history["train_loss"].append(train_loss)
         history["val_loss"].append(val_loss)
         history["train_acc"].append(train_acc)
@@ -145,7 +161,7 @@ def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight
 
         scheduler.step(val_loss)
 
-        if val_f1 > best_val_f1 and val_loss < best_val_loss:
+        if val_f1 > best_val_f1:
             # best_val_acc = val_acc
             # best_val_loss = val_loss
             # best_epoch = epoch + 1
@@ -168,6 +184,7 @@ def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight
         
         else:
             wait += 1
+            print(f"⚠️ No improvement. Patience: {wait}/{patience}")
 
         if wait >= patience:
             print(f"\n Early stopping triggered at epoch {epoch+1}")
@@ -191,6 +208,84 @@ def train_model(model,train_loader,val_loader , device, epochs=10,lr=1e-4,weight
 
 
 
+# def test_model(
+#     model,
+#     test_loader,
+#     device,
+#     class_names,
+#     return_details=False
+# ):
+#     """
+#     Research-grade test function.
+
+#     Returns:
+#     - accuracy
+#     - classification report
+#     - confusion matrix
+#     - labels, preds, probs, images (optional for ROC-AUC, GradCAM, grayscale)
+#     """
+
+#     criterion = nn.CrossEntropyLoss()
+
+#     model.eval()
+
+#     running_correct = 0
+#     total = 0
+
+#     all_preds = []
+#     all_labels = []
+#     all_probs = []
+#     sample_images = []
+#     sample_labels = []
+#     class_counts = {i: 0 for i in range(len(class_names))}
+#     max_per_class = 3
+
+#     with torch.no_grad():
+
+        
+#         for images, labels in test_loader:
+
+#             images = images.to(device)
+#             labels = labels.to(device)
+
+#             outputs = model(images)
+#             probs = torch.softmax(outputs, dim=1)
+#             _, preds = torch.max(outputs, 1)
+
+#             running_correct += (preds == labels).sum().item()
+#             total += labels.size(0)
+
+#             all_preds.extend(preds.cpu().numpy())
+#             all_labels.extend(labels.cpu().numpy())
+#             all_probs.extend(probs.cpu().numpy())
+
+#             for img, label in zip(images, labels):
+#                 label_int = label.item()
+
+#                 if class_counts[label_int] < max_per_class:
+#                     sample_images.append(img.cpu())
+#                     sample_labels.append(label_int)
+#                     class_counts[label_int] += 1
+
+#     test_acc = running_correct / total
+
+#     report = classification_report(all_labels, all_preds, target_names=class_names)
+#     cm = confusion_matrix(all_labels, all_preds)
+
+#     if return_details:
+#         return (
+#             test_acc,
+#             report,
+#             cm,
+#             np.array(all_labels),
+#             np.array(all_preds),
+#             np.array(all_probs),
+#             sample_images, sample_labels
+#         )
+
+#     return test_acc, report, cm
+
+
 def test_model(
     model,
     test_loader,
@@ -199,71 +294,75 @@ def test_model(
     return_details=False
 ):
     """
-    Research-grade test function.
-
-    Returns:
-    - accuracy
-    - classification report
-    - confusion matrix
-    - labels, preds, probs, images (optional for ROC-AUC, GradCAM, grayscale)
+    Research-grade test function with optimized memory management.
     """
-
-    criterion = nn.CrossEntropyLoss()
-
     model.eval()
 
-    running_correct = 0
-    total = 0
-
+    # Tensors list for efficient collection
     all_preds = []
     all_labels = []
     all_probs = []
+    
+    # Visualization samples
     sample_images = []
     sample_labels = []
     class_counts = {i: 0 for i in range(len(class_names))}
     max_per_class = 3
 
+    # Gradients off taaki memory bache aur accuracy distort na ho
     with torch.no_grad():
-
-        
         for images, labels in test_loader:
-
             images = images.to(device)
             labels = labels.to(device)
 
+            # Forward pass
             outputs = model(images)
             probs = torch.softmax(outputs, dim=1)
             _, preds = torch.max(outputs, 1)
 
-            running_correct += (preds == labels).sum().item()
-            total += labels.size(0)
+            # Detach and move to CPU immediately to prevent GPU memory leak
+            all_preds.append(preds.detach().cpu())
+            all_labels.append(labels.detach().cpu())
+            all_probs.append(probs.detach().cpu())
 
-            all_preds.extend(preds.cpu().numpy())
-            all_labels.extend(labels.cpu().numpy())
-            all_probs.extend(probs.cpu().numpy())
-
+            # Sample collection for Grad-CAM / Visualization
             for img, label in zip(images, labels):
                 label_int = label.item()
-
                 if class_counts[label_int] < max_per_class:
                     sample_images.append(img.cpu())
                     sample_labels.append(label_int)
                     class_counts[label_int] += 1
 
-    test_acc = running_correct / total
+    # 1. Convert lists of tensors to single numpy arrays
+    all_preds = torch.cat(all_preds).numpy()
+    all_labels = torch.cat(all_labels).numpy()
+    all_probs = torch.cat(all_probs).numpy()
 
-    report = classification_report(all_labels, all_preds, target_names=class_names)
+    # 2. Calculate Overall Accuracy
+    test_acc = (all_preds == all_labels).mean()
+    
+    # 3. Generate Research Metrics
+    # zero_division=0 ensures code doesn't crash if a class has 0 predictions
+    report = classification_report(
+        all_labels, 
+        all_preds, 
+        target_names=class_names, 
+        zero_division=0
+    )
     cm = confusion_matrix(all_labels, all_preds)
+    print("\n📊 Classification Report:\n")
+    print(report)
 
     if return_details:
         return (
             test_acc,
             report,
             cm,
-            np.array(all_labels),
-            np.array(all_preds),
-            np.array(all_probs),
-            sample_images, sample_labels
+            all_labels,   # Actual labels
+            all_preds,    # Predicted labels
+            all_probs,    # Softmax probabilities (For ROC-AUC)
+            sample_images, 
+            sample_labels
         )
 
     return test_acc, report, cm
